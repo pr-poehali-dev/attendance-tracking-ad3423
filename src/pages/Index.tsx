@@ -368,8 +368,8 @@ const Index = () => {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Статистика посещаемости</CardTitle>
-                    <CardDescription>Отчёт по пропускам за месяц</CardDescription>
+                    <CardTitle>Отчёт по посещаемости</CardTitle>
+                    <CardDescription>Количество пропущенных часов по дням для каждого студента</CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <Label className="text-sm">Месяц:</Label>
@@ -383,50 +383,56 @@ const Index = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {students.map(student => {
-                    const stats = getMonthlyStats(student.id);
-                    const attendanceRate = stats.totalPairsScheduled > 0 
-                      ? Math.round((stats.totalPairsAttended / stats.totalPairsScheduled) * 100) 
-                      : 100;
+                    const monthStr = format(selectedMonth, 'yyyy-MM');
+                    const studentRecords = attendance.filter(a => 
+                      a.studentId === student.id && a.date.startsWith(monthStr)
+                    );
+                    
+                    const dateMap = new Map<string, number>();
+                    studentRecords.forEach(record => {
+                      const currentMissed = dateMap.get(record.date) || 0;
+                      const missed = record.pairs.filter(p => !p).length * 2;
+                      dateMap.set(record.date, currentMissed + missed);
+                    });
+
+                    const sortedDates = Array.from(dateMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                    const totalMissed = sortedDates.reduce((sum, [_, hours]) => sum + hours, 0);
 
                     return (
                       <Card key={student.id} className="hover-scale">
                         <CardContent className="p-4">
                           <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <h3 className="font-semibold text-slate-900">{student.name}</h3>
-                              <Badge variant={stats.missedHours > 12 ? 'destructive' : stats.missedHours > 4 ? 'outline' : 'default'}>
-                                Пропущено: {stats.missedHours} ч.
+                            <div className="flex items-center justify-between pb-3 border-b">
+                              <h3 className="font-semibold text-lg text-slate-900">{student.name}</h3>
+                              <Badge variant={totalMissed > 12 ? 'destructive' : totalMissed > 4 ? 'outline' : 'default'}>
+                                Всего пропущено: {totalMissed} ч.
                               </Badge>
                             </div>
                             
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-slate-600">Посещаемость</span>
-                                <span className="font-medium">{attendanceRate}%</span>
+                            {sortedDates.length > 0 ? (
+                              <div className="space-y-2">
+                                {sortedDates.map(([date, missedHours]) => (
+                                  <div key={date} className="flex items-center justify-between p-2 rounded bg-slate-50 hover:bg-slate-100 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                      <Icon name="Calendar" size={16} className="text-slate-600" />
+                                      <span className="text-sm font-medium text-slate-900">
+                                        {format(new Date(date), 'd MMMM yyyy', { locale: ru })}
+                                      </span>
+                                    </div>
+                                    <Badge variant={missedHours > 0 ? 'destructive' : 'default'}>
+                                      {missedHours > 0 ? `Пропущено: ${missedHours} ч.` : 'Присутствовал'}
+                                    </Badge>
+                                  </div>
+                                ))}
                               </div>
-                              <Progress value={attendanceRate} className="h-2" />
-                            </div>
-
-                            <div className="grid grid-cols-4 gap-2 text-center text-sm">
-                              <div className="p-2 bg-slate-50 rounded">
-                                <div className="font-semibold text-slate-900">{stats.totalDays}</div>
-                                <div className="text-slate-600">Дней</div>
+                            ) : (
+                              <div className="text-center py-8 text-slate-500">
+                                <Icon name="Calendar" size={32} className="mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">Нет записей за выбранный месяц</p>
                               </div>
-                              <div className="p-2 bg-blue-50 rounded">
-                                <div className="font-semibold text-blue-700">{stats.totalPairsScheduled}</div>
-                                <div className="text-blue-600">Всего пар</div>
-                              </div>
-                              <div className="p-2 bg-green-50 rounded">
-                                <div className="font-semibold text-green-700">{stats.totalPairsAttended}</div>
-                                <div className="text-green-600">Посещено</div>
-                              </div>
-                              <div className="p-2 bg-red-50 rounded">
-                                <div className="font-semibold text-red-700">{stats.missedPairs}</div>
-                                <div className="text-red-600">Пропущено</div>
-                              </div>
-                            </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
