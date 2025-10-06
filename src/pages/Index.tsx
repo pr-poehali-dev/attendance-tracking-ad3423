@@ -240,7 +240,8 @@ const Index = () => {
         const dateStr = format(date, 'yyyy-MM-dd');
         const missedHours = dateMap.get(dateStr) || 0;
         totalMissed += missedHours;
-        row[`${i}`] = missedHours > 0 ? missedHours : 0;
+        const dateHeader = format(date, 'dd.MM', { locale: ru });
+        row[dateHeader] = missedHours;
       }
 
       row['ИТОГО'] = totalMissed;
