@@ -386,6 +386,10 @@ const Index = () => {
                 <div className="space-y-6">
                   {students.map(student => {
                     const monthStr = format(selectedMonth, 'yyyy-MM');
+                    const year = selectedMonth.getFullYear();
+                    const month = selectedMonth.getMonth();
+                    const daysInMonth = new Date(year, month + 1, 0).getDate();
+                    
                     const studentRecords = attendance.filter(a => 
                       a.studentId === student.id && a.date.startsWith(monthStr)
                     );
@@ -397,8 +401,14 @@ const Index = () => {
                       dateMap.set(record.date, currentMissed + missed);
                     });
 
-                    const sortedDates = Array.from(dateMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-                    const totalMissed = sortedDates.reduce((sum, [_, hours]) => sum + hours, 0);
+                    const allDates = Array.from({ length: daysInMonth }, (_, i) => {
+                      const date = new Date(year, month, i + 1);
+                      const dateStr = format(date, 'yyyy-MM-dd');
+                      const missedHours = dateMap.get(dateStr) || 0;
+                      return { date: dateStr, missedHours };
+                    });
+
+                    const totalMissed = allDates.reduce((sum, { missedHours }) => sum + missedHours, 0);
 
                     return (
                       <Card key={student.id} className="hover-scale">
@@ -411,28 +421,21 @@ const Index = () => {
                               </Badge>
                             </div>
                             
-                            {sortedDates.length > 0 ? (
-                              <div className="space-y-2">
-                                {sortedDates.map(([date, missedHours]) => (
-                                  <div key={date} className="flex items-center justify-between p-2 rounded bg-slate-50 hover:bg-slate-100 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                      <Icon name="Calendar" size={16} className="text-slate-600" />
-                                      <span className="text-sm font-medium text-slate-900">
-                                        {format(new Date(date), 'd MMMM yyyy', { locale: ru })}
-                                      </span>
-                                    </div>
-                                    <Badge variant={missedHours > 0 ? 'destructive' : 'default'}>
-                                      {missedHours > 0 ? `Пропущено: ${missedHours} ч.` : 'Присутствовал'}
-                                    </Badge>
+                            <div className="space-y-1">
+                              {allDates.map(({ date, missedHours }) => (
+                                <div key={date} className="flex items-center justify-between p-2 rounded hover:bg-slate-50 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                    <Icon name="Calendar" size={14} className="text-slate-500" />
+                                    <span className="text-sm text-slate-700">
+                                      {format(new Date(date), 'd MMMM', { locale: ru })}
+                                    </span>
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-center py-8 text-slate-500">
-                                <Icon name="Calendar" size={32} className="mx-auto mb-2 opacity-50" />
-                                <p className="text-sm">Нет записей за выбранный месяц</p>
-                              </div>
-                            )}
+                                  <span className={`text-sm font-medium ${missedHours > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                    {missedHours > 0 ? `${missedHours} ч.` : '—'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
