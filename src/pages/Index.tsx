@@ -40,49 +40,41 @@ const Index = () => {
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [newStudentName, setNewStudentName] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
-  const [pairsDialogOpen, setPairsDialogOpen] = useState(false);
-  const [totalPairs, setTotalPairs] = useState(1);
-  const [pairsStatus, setPairsStatus] = useState<boolean[]>([false, false, false, false, false]);
+  const [selectedPairNumber, setSelectedPairNumber] = useState(1);
 
   const todayStr = format(selectedDate, 'yyyy-MM-dd');
 
-  const openPairsDialog = (studentId: string) => {
-    const existing = getAttendanceForDate(studentId, todayStr);
-    setSelectedStudent(studentId);
-    if (existing) {
-      setTotalPairs(existing.pairs.length);
-      setPairsStatus(existing.pairs);
-    } else {
-      setTotalPairs(1);
-      setPairsStatus([false, false, false, false, false]);
-    }
-    setPairsDialogOpen(true);
-  };
-
-  const saveAttendance = () => {
-    if (selectedStudent) {
-      const pairs = pairsStatus.slice(0, totalPairs);
-      setAttendance(prev => {
-        const existing = prev.find(a => a.studentId === selectedStudent && a.date === todayStr);
-        if (existing) {
-          return prev.map(a => 
-            a.studentId === selectedStudent && a.date === todayStr 
-              ? { ...a, pairs } 
-              : a
-          );
+  const toggleStudentAttendance = (studentId: string, pairIndex: number) => {
+    setAttendance(prev => {
+      const existing = prev.find(a => a.studentId === studentId && a.date === todayStr);
+      
+      if (existing) {
+        const newPairs = [...existing.pairs];
+        if (newPairs.length <= pairIndex) {
+          while (newPairs.length <= pairIndex) {
+            newPairs.push(true);
+          }
         }
-        return [...prev, { studentId: selectedStudent, date: todayStr, pairs }];
-      });
-      setPairsDialogOpen(false);
-      setSelectedStudent(null);
-    }
+        newPairs[pairIndex] = !newPairs[pairIndex];
+        
+        return prev.map(a => 
+          a.studentId === studentId && a.date === todayStr 
+            ? { ...a, pairs: newPairs } 
+            : a
+        );
+      } else {
+        const newPairs = Array(5).fill(true);
+        newPairs[pairIndex] = false;
+        return [...prev, { studentId, date: todayStr, pairs: newPairs }];
+      }
+    });
   };
 
-  const togglePair = (index: number) => {
-    const newStatus = [...pairsStatus];
-    newStatus[index] = !newStatus[index];
-    setPairsStatus(newStatus);
+  const getStudentPairStatus = (studentId: string, pairIndex: number): boolean => {
+    const record = attendance.find(a => a.studentId === studentId && a.date === todayStr);
+    if (!record) return true;
+    if (!record.pairs[pairIndex]) return true;
+    return record.pairs[pairIndex];
   };
 
   const getAttendanceForDate = (studentId: string, date: string) => {
@@ -112,11 +104,12 @@ const Index = () => {
       a.studentId === studentId && a.date.startsWith(monthStr)
     );
     
-    const totalDays = records.length;
-    const totalPairsScheduled = records.reduce((sum, r) => sum + r.pairs.length, 0);
-    const totalPairsAttended = records.reduce((sum, r) => sum + r.pairs.filter(p => p).length, 0);
+    const allPairs = records.flatMap(r => r.pairs);
+    const totalPairsScheduled = allPairs.length;
+    const totalPairsAttended = allPairs.filter(p => p).length;
     const missedPairs = totalPairsScheduled - totalPairsAttended;
     const missedHours = missedPairs * 2;
+    const totalDays = records.length;
     
     return { totalDays, totalPairsScheduled, totalPairsAttended, missedPairs, missedHours };
   };
@@ -187,146 +180,78 @@ const Index = () => {
                     />
                   </div>
                   
-                  <div className="flex-1">
-                    <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <h3 className="font-semibold text-blue-900 mb-1">
+                  <div className="flex-1 space-y-6">
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <h3 className="font-semibold text-blue-900 mb-3">
                         {format(selectedDate, 'd MMMM yyyy', { locale: ru })}
                       </h3>
-                      <p className="text-sm text-blue-700">1 пара = 2 часа</p>
+                      <div className="space-y-2">
+                        <Label className="text-blue-900">Выберите пару для отметки:</Label>
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4, 5].map(num => (
+                            <Button
+                              key={num}
+                              variant={selectedPairNumber === num ? 'default' : 'outline'}
+                              className="flex-1"
+                              onClick={() => setSelectedPairNumber(num)}
+                            >
+                              {num} пара
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-3">
-                      {students.map(student => {
-                        const record = getAttendanceForDate(student.id, todayStr);
-                        const attended = record ? record.pairs.filter(p => p).length : 0;
-                        const total = record ? record.pairs.length : 0;
-                        return (
-                          <Card key={student.id} className="hover-scale cursor-pointer" onClick={() => openPairsDialog(student.id)}>
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between gap-4">
-                                <div className="flex-1">
-                                  <p className="font-medium text-slate-900">{student.name}</p>
-                                  {record && (
-                                    <div className="flex gap-1 mt-1">
-                                      {record.pairs.map((present, idx) => (
-                                        <div 
-                                          key={idx} 
-                                          className={`w-6 h-6 rounded flex items-center justify-center text-xs font-semibold ${
-                                            present ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                          }`}
-                                        >
-                                          {idx + 1}
-                                        </div>
-                                      ))}
-                                      <span className="text-sm text-slate-500 ml-2 self-center">
-                                        {attended * 2} из {total * 2} ч.
-                                      </span>
-                                    </div>
-                                  )}
-                                  {!record && (
-                                    <p className="text-sm text-slate-400">Нажмите для отметки</p>
-                                  )}
-                                </div>
-                                
-                                {record && (
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant={attended === total ? 'default' : attended > 0 ? 'outline' : 'destructive'}>
-                                      {attended}/{total}
-                                    </Badge>
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg">Пара {selectedPairNumber} - Список группы</CardTitle>
+                          <Badge variant="outline">{students.filter(s => getStudentPairStatus(s.id, selectedPairNumber - 1)).length} присутствуют</Badge>
+                        </div>
+                        <CardDescription>Нажмите на студента чтобы отметить отсутствие</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {students.map((student, index) => {
+                            const isPresent = getStudentPairStatus(student.id, selectedPairNumber - 1);
+                            return (
+                              <div
+                                key={student.id}
+                                onClick={() => toggleStudentAttendance(student.id, selectedPairNumber - 1)}
+                                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all hover-scale ${
+                                  isPresent 
+                                    ? 'bg-white hover:bg-green-50 border-slate-200' 
+                                    : 'bg-red-50 hover:bg-red-100 border-red-200'
+                                }`}
+                                style={{ animationDelay: `${index * 30}ms` }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+                                    isPresent ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {isPresent ? <Icon name="Check" size={20} /> : <Icon name="X" size={20} />}
                                   </div>
-                                )}
+                                  <div>
+                                    <p className="font-medium text-slate-900">{student.name}</p>
+                                    <p className="text-xs text-slate-500">
+                                      {isPresent ? 'Присутствует' : 'Отсутствует'} на {selectedPairNumber} паре
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge variant={isPresent ? 'default' : 'destructive'}>
+                                  {isPresent ? '2 ч.' : '0 ч.'}
+                                </Badge>
                               </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Dialog open={pairsDialogOpen} onOpenChange={setPairsDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Отметка посещаемости</DialogTitle>
-                  <DialogDescription>
-                    {selectedStudent && students.find(s => s.id === selectedStudent)?.name}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-6 py-4">
-                  <div className="space-y-3">
-                    <Label>Сколько пар было в этот день?</Label>
-                    <div className="flex gap-2">
-                      {[1, 2, 3, 4, 5].map(num => (
-                        <Button
-                          key={num}
-                          variant={totalPairs === num ? 'default' : 'outline'}
-                          className="flex-1"
-                          onClick={() => setTotalPairs(num)}
-                        >
-                          {num}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    <Label>Отметьте каждую пару</Label>
-                    <div className="space-y-2">
-                      {Array.from({ length: totalPairs }, (_, i) => i).map(idx => (
-                        <div key={idx} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-slate-50 transition-colors">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">Пара {idx + 1}</p>
-                            <p className="text-xs text-slate-500">2 часа</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant={pairsStatus[idx] === true ? 'default' : 'outline'}
-                              onClick={() => togglePair(idx)}
-                              className={pairsStatus[idx] === true ? 'bg-green-600 hover:bg-green-700' : ''}
-                            >
-                              <Icon name="Check" size={16} />
-                              <span className="ml-1">Был</span>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={pairsStatus[idx] === false ? 'destructive' : 'outline'}
-                              onClick={() => {
-                                const newStatus = [...pairsStatus];
-                                newStatus[idx] = false;
-                                setPairsStatus(newStatus);
-                              }}
-                            >
-                              <Icon name="X" size={16} />
-                              <span className="ml-1">Не было</span>
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-blue-900">Посещено часов:</span>
-                      <span className="font-semibold text-blue-900">{pairsStatus.slice(0, totalPairs).filter(p => p).length * 2} из {totalPairs * 2} ч.</span>
-                    </div>
-                    <div className="flex justify-between text-sm mt-1">
-                      <span className="text-blue-900">Пропущено:</span>
-                      <span className="font-semibold text-red-600">{(totalPairs - pairsStatus.slice(0, totalPairs).filter(p => p).length) * 2} ч.</span>
-                    </div>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setPairsDialogOpen(false)}>Отмена</Button>
-                  <Button onClick={saveAttendance}>Сохранить</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </TabsContent>
 
           <TabsContent value="students" className="animate-fade-in">
