@@ -208,7 +208,7 @@ const Index = () => {
                           <CardTitle className="text-lg">Пара {selectedPairNumber} - Список группы</CardTitle>
                           <Badge variant="outline">{students.filter(s => getStudentPairStatus(s.id, selectedPairNumber - 1)).length} присутствуют</Badge>
                         </div>
-                        <CardDescription>Нажмите на студента чтобы отметить отсутствие</CardDescription>
+                        <CardDescription>Нажмите крестик чтобы отметить отсутствие студента</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
@@ -217,19 +217,16 @@ const Index = () => {
                             return (
                               <div
                                 key={student.id}
-                                onClick={() => toggleStudentAttendance(student.id, selectedPairNumber - 1)}
-                                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all hover-scale ${
+                                className={`flex items-center justify-between p-3 rounded-lg border transition-all animate-fade-in ${
                                   isPresent 
-                                    ? 'bg-white hover:bg-green-50 border-slate-200' 
-                                    : 'bg-red-50 hover:bg-red-100 border-red-200'
+                                    ? 'bg-white border-slate-200' 
+                                    : 'bg-red-50 border-red-200'
                                 }`}
                                 style={{ animationDelay: `${index * 30}ms` }}
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                                    isPresent ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                  }`}>
-                                    {isPresent ? <Icon name="Check" size={20} /> : <Icon name="X" size={20} />}
+                                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                    <Icon name="User" size={20} className="text-slate-600" />
                                   </div>
                                   <div>
                                     <p className="font-medium text-slate-900">{student.name}</p>
@@ -238,9 +235,19 @@ const Index = () => {
                                     </p>
                                   </div>
                                 </div>
-                                <Badge variant={isPresent ? 'default' : 'destructive'}>
-                                  {isPresent ? '2 ч.' : '0 ч.'}
-                                </Badge>
+                                <div className="flex items-center gap-3">
+                                  <Badge variant={isPresent ? 'default' : 'destructive'} className="mr-2">
+                                    {isPresent ? '2 ч.' : '0 ч.'}
+                                  </Badge>
+                                  <Button
+                                    size="sm"
+                                    variant={isPresent ? 'outline' : 'destructive'}
+                                    onClick={() => toggleStudentAttendance(student.id, selectedPairNumber - 1)}
+                                    className={!isPresent ? 'bg-red-600 hover:bg-red-700' : ''}
+                                  >
+                                    <Icon name="X" size={16} />
+                                  </Button>
+                                </div>
                               </div>
                             );
                           })}
