@@ -136,22 +136,45 @@ const Index = () => {
 
   const exportToExcel = () => {
     const monthStr = format(selectedMonth, 'yyyy-MM');
-    const data = students.map(student => {
-      const stats = getMonthlyStats(student.id);
-      return {
-        'ФИО': student.name,
-        'Учебных дней': stats.totalDays,
-        'Всего пар': stats.totalPairsScheduled,
-        'Посещено пар': stats.totalPairsAttended,
-        'Пропущено пар': stats.missedPairs,
-        'Пропущено часов': stats.missedHours
-      };
+    const year = selectedMonth.getFullYear();
+    const month = selectedMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const data: any[] = [];
+
+    students.forEach(student => {
+      const studentRecords = attendance.filter(a => 
+        a.studentId === student.id && a.date.startsWith(monthStr)
+      );
+      
+      const dateMap = new Map<string, number>();
+      studentRecords.forEach(record => {
+        const currentMissed = dateMap.get(record.date) || 0;
+        const missed = record.pairs.filter(p => !p).length * 2;
+        dateMap.set(record.date, currentMissed + missed);
+      });
+
+      const row: any = { 'ФИО': student.name };
+      let totalMissed = 0;
+
+      for (let i = 1; i <= daysInMonth; i++) {
+        const date = new Date(year, month, i);
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const missedHours = dateMap.get(dateStr) || 0;
+        totalMissed += missedHours;
+        row[`${i}`] = missedHours > 0 ? missedHours : 0;
+      }
+
+      row['ИТОГО'] = totalMissed;
+      data.push(row);
     });
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Посещаемость');
-    XLSX.writeFile(wb, `Посещаемость_АД3423_${monthStr}.xlsx`);
+    
+    const fileName = `Отчет_посещаемость_${format(selectedMonth, 'MMMM_yyyy', { locale: ru })}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   };
 
   return (
@@ -371,7 +394,7 @@ const Index = () => {
                     <CardTitle>Отчёт по посещаемости</CardTitle>
                     <CardDescription>Количество пропущенных часов по дням для каждого студента</CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <Label className="text-sm">Месяц:</Label>
                     <Input
                       type="month"
@@ -379,6 +402,10 @@ const Index = () => {
                       onChange={(e) => setSelectedMonth(new Date(e.target.value))}
                       className="w-40"
                     />
+                    <Button onClick={exportToExcel} className="gap-2 bg-green-600 hover:bg-green-700">
+                      <Icon name="FileDown" size={16} />
+                      Скачать Excel
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
