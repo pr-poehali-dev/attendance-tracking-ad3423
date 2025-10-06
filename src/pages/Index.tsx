@@ -98,6 +98,26 @@ const Index = () => {
     setAttendance(attendance.filter(a => a.studentId !== id));
   };
 
+  const markAllPresent = () => {
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const pairIndex = selectedPairNumber - 1;
+    
+    const updatedAttendance = attendance.filter(a => 
+      !(a.date === dateStr && a.pairIndex === pairIndex)
+    );
+    
+    students.forEach(student => {
+      updatedAttendance.push({
+        studentId: student.id,
+        date: dateStr,
+        pairIndex,
+        pairs: [true]
+      });
+    });
+    
+    setAttendance(updatedAttendance);
+  };
+
   const getMonthlyStats = (studentId: string) => {
     const monthStr = format(selectedMonth, 'yyyy-MM');
     const records = attendance.filter(a => 
@@ -208,7 +228,18 @@ const Index = () => {
                           <CardTitle className="text-lg">Пара {selectedPairNumber} - Список группы</CardTitle>
                           <Badge variant="outline">{students.filter(s => getStudentPairStatus(s.id, selectedPairNumber - 1)).length} присутствуют</Badge>
                         </div>
-                        <CardDescription>Нажмите крестик чтобы отметить отсутствие студента</CardDescription>
+                        <div className="flex items-center justify-between mt-2">
+                          <CardDescription>Нажмите крестик чтобы отметить отсутствие студента</CardDescription>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={markAllPresent}
+                            className="text-green-700 border-green-300 hover:bg-green-50"
+                          >
+                            <Icon name="CheckCheck" size={16} className="mr-2" />
+                            Все присутствуют
+                          </Button>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
