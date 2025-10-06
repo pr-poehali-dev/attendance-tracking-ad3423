@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import Icon from '@/components/ui/icon';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
+import funcUrls from '../../backend/func2url.json';
 
 interface Student {
   id: string;
@@ -34,8 +35,9 @@ const initialStudents: Student[] = [
 ];
 
 const Index = () => {
-  const [students, setStudents] = useState<Student[]>(initialStudents);
+  const [students, setStudents] = useState<Student[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [newStudentName, setNewStudentName] = useState('');
@@ -44,10 +46,76 @@ const Index = () => {
 
   const todayStr = format(selectedDate, 'yyyy-MM-dd');
 
+  useEffect(() => {
+    loadStudents();
+    loadAttendance();
+  }, []);
+
+  const loadStudents = async () => {
+    try {
+      const response = await fetch(funcUrls.students);
+      if (response.ok) {
+        const data = await response.json();
+        setStudents(data);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки студентов:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadAttendance = async () => {
+    try {
+      const response = await fetch(funcUrls.attendance);
+      if (response.ok) {
+        const data = await response.json();
+        setAttendance(data);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки посещаемости:', error);
+    }
+  };
+
+  const saveAttendanceToDB = async (studentId: string, date: string, pairIndex: number, isPresent: boolean) => {
+    try {
+      await fetch(funcUrls.attendance, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, date, pairIndex, isPresent })
+      });
+    } catch (error) {
+      console.error('Ошибка сохранения посещаемости:', error);
+    }
+  };
+
+  const saveStudentToDB = async (student: Student) => {
+    try {
+      await fetch(funcUrls.students, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(student)
+      });
+    } catch (error) {
+      console.error('Ошибка сохранения студента:', error);
+    }
+  };
+
+  const deleteStudentFromDB = async (id: string) => {
+    try {
+      await fetch(`${funcUrls.students}?id=${id}`, {
+        method: 'DELETE'
+      });
+    } catch (error) {
+      console.error('Ошибка удаления студента:', error);
+    }
+  };
+
   const toggleStudentAttendance = (studentId: string, pairIndex: number) => {
     setAttendance(prev => {
       const existing = prev.find(a => a.studentId === studentId && a.date === todayStr);
       
+      let isPresent = true;
       if (existing) {
         const newPairs = [...existing.pairs];
         if (newPairs.length <= pairIndex) {
@@ -56,6 +124,9 @@ const Index = () => {
           }
         }
         newPairs[pairIndex] = !newPairs[pairIndex];
+        isPresent = newPairs[pairIndex];
+        
+        saveAttendanceToDB(studentId, todayStr, pairIndex, isPresent);
         
         return prev.map(a => 
           a.studentId === studentId && a.date === todayStr 
@@ -65,6 +136,10 @@ const Index = () => {
       } else {
         const newPairs = Array(5).fill(true);
         newPairs[pairIndex] = false;
+        isPresent = false;
+        
+        saveAttendanceToDB(studentId, todayStr, pairIndex, isPresent);
+        
         return [...prev, { studentId, date: todayStr, pairs: newPairs }];
       }
     });
@@ -81,24 +156,26 @@ const Index = () => {
     return attendance.find(a => a.studentId === studentId && a.date === date);
   };
 
-  const addStudent = () => {
+  const addStudent = async () => {
     if (newStudentName.trim()) {
       const newStudent: Student = {
         id: Date.now().toString(),
         name: newStudentName.trim()
       };
+      await saveStudentToDB(newStudent);
       setStudents([...students, newStudent]);
       setNewStudentName('');
       setIsAddDialogOpen(false);
     }
   };
 
-  const deleteStudent = (id: string) => {
+  const deleteStudent = async (id: string) => {
+    await deleteStudentFromDB(id);
     setStudents(students.filter(s => s.id !== id));
     setAttendance(attendance.filter(a => a.studentId !== id));
   };
 
-  const markAllPresent = () => {
+  const markAllPresent = async () => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const pairIndex = selectedPairNumber - 1;
     
@@ -106,14 +183,15 @@ const Index = () => {
       !(a.date === dateStr && a.pairIndex === pairIndex)
     );
     
-    students.forEach(student => {
+    for (const student of students) {
+      await saveAttendanceToDB(student.id, dateStr, pairIndex, true);
       updatedAttendance.push({
         studentId: student.id,
         date: dateStr,
         pairIndex,
         pairs: [true]
       });
-    });
+    }
     
     setAttendance(updatedAttendance);
   };
@@ -176,6 +254,17 @@ const Index = () => {
     const fileName = `Отчет_посещаемость_${format(selectedMonth, 'MMMM_yyyy', { locale: ru })}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-8 flex items-center justify-center">
+        <div className="text-center">
+          <Icon name="Loader2" size={48} className="animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-slate-600">Загрузка данных...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4 md:p-8">

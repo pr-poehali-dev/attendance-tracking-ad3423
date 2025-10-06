@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "name": "Get all students",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "type"
+    },
+    {
+      "name": "Add new student",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "id": "test123",
+        "name": "Тестовый Студент"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "Get all attendance records",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": [],
+      "bodyMatcher": "type"
+    },
+    {
+      "name": "Save attendance record",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "studentId": "test123",
+        "date": "2025-01-15",
+        "pairIndex": 0,
+        "isPresent": true
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
