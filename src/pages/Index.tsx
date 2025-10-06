@@ -22,8 +22,7 @@ interface Student {
 interface AttendanceRecord {
   studentId: string;
   date: string;
-  pairsAttended: number;
-  totalPairs: number;
+  pairs: boolean[];
 }
 
 const initialStudents: Student[] = [
@@ -44,7 +43,7 @@ const Index = () => {
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
   const [pairsDialogOpen, setPairsDialogOpen] = useState(false);
   const [totalPairs, setTotalPairs] = useState(1);
-  const [attendedPairs, setAttendedPairs] = useState(0);
+  const [pairsStatus, setPairsStatus] = useState<boolean[]>([false, false, false, false, false]);
 
   const todayStr = format(selectedDate, 'yyyy-MM-dd');
 
@@ -52,31 +51,38 @@ const Index = () => {
     const existing = getAttendanceForDate(studentId, todayStr);
     setSelectedStudent(studentId);
     if (existing) {
-      setTotalPairs(existing.totalPairs);
-      setAttendedPairs(existing.pairsAttended);
+      setTotalPairs(existing.pairs.length);
+      setPairsStatus(existing.pairs);
     } else {
       setTotalPairs(1);
-      setAttendedPairs(0);
+      setPairsStatus([false, false, false, false, false]);
     }
     setPairsDialogOpen(true);
   };
 
   const saveAttendance = () => {
     if (selectedStudent) {
+      const pairs = pairsStatus.slice(0, totalPairs);
       setAttendance(prev => {
         const existing = prev.find(a => a.studentId === selectedStudent && a.date === todayStr);
         if (existing) {
           return prev.map(a => 
             a.studentId === selectedStudent && a.date === todayStr 
-              ? { ...a, pairsAttended: attendedPairs, totalPairs } 
+              ? { ...a, pairs } 
               : a
           );
         }
-        return [...prev, { studentId: selectedStudent, date: todayStr, pairsAttended: attendedPairs, totalPairs }];
+        return [...prev, { studentId: selectedStudent, date: todayStr, pairs }];
       });
       setPairsDialogOpen(false);
       setSelectedStudent(null);
     }
+  };
+
+  const togglePair = (index: number) => {
+    const newStatus = [...pairsStatus];
+    newStatus[index] = !newStatus[index];
+    setPairsStatus(newStatus);
   };
 
   const getAttendanceForDate = (studentId: string, date: string) => {
@@ -107,8 +113,8 @@ const Index = () => {
     );
     
     const totalDays = records.length;
-    const totalPairsScheduled = records.reduce((sum, r) => sum + r.totalPairs, 0);
-    const totalPairsAttended = records.reduce((sum, r) => sum + r.pairsAttended, 0);
+    const totalPairsScheduled = records.reduce((sum, r) => sum + r.pairs.length, 0);
+    const totalPairsAttended = records.reduce((sum, r) => sum + r.pairs.filter(p => p).length, 0);
     const missedPairs = totalPairsScheduled - totalPairsAttended;
     const missedHours = missedPairs * 2;
     
@@ -192,6 +198,8 @@ const Index = () => {
                     <div className="space-y-3">
                       {students.map(student => {
                         const record = getAttendanceForDate(student.id, todayStr);
+                        const attended = record ? record.pairs.filter(p => p).length : 0;
+                        const total = record ? record.pairs.length : 0;
                         return (
                           <Card key={student.id} className="hover-scale cursor-pointer" onClick={() => openPairsDialog(student.id)}>
                             <CardContent className="p-4">
@@ -199,9 +207,21 @@ const Index = () => {
                                 <div className="flex-1">
                                   <p className="font-medium text-slate-900">{student.name}</p>
                                   {record && (
-                                    <p className="text-sm text-slate-500">
-                                      Посещено: {record.pairsAttended} из {record.totalPairs} пар ({record.pairsAttended * 2} ч.)
-                                    </p>
+                                    <div className="flex gap-1 mt-1">
+                                      {record.pairs.map((present, idx) => (
+                                        <div 
+                                          key={idx} 
+                                          className={`w-6 h-6 rounded flex items-center justify-center text-xs font-semibold ${
+                                            present ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                          }`}
+                                        >
+                                          {idx + 1}
+                                        </div>
+                                      ))}
+                                      <span className="text-sm text-slate-500 ml-2 self-center">
+                                        {attended * 2} из {total * 2} ч.
+                                      </span>
+                                    </div>
                                   )}
                                   {!record && (
                                     <p className="text-sm text-slate-400">Нажмите для отметки</p>
@@ -210,8 +230,8 @@ const Index = () => {
                                 
                                 {record && (
                                   <div className="flex items-center gap-2">
-                                    <Badge variant={record.pairsAttended === record.totalPairs ? 'default' : record.pairsAttended > 0 ? 'outline' : 'destructive'}>
-                                      {record.pairsAttended}/{record.totalPairs}
+                                    <Badge variant={attended === total ? 'default' : attended > 0 ? 'outline' : 'destructive'}>
+                                      {attended}/{total}
                                     </Badge>
                                   </div>
                                 )}
@@ -234,7 +254,7 @@ const Index = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6 py-4">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label>Сколько пар было в этот день?</Label>
                     <div className="flex gap-2">
                       {[1, 2, 3, 4, 5].map(num => (
@@ -242,10 +262,7 @@ const Index = () => {
                           key={num}
                           variant={totalPairs === num ? 'default' : 'outline'}
                           className="flex-1"
-                          onClick={() => {
-                            setTotalPairs(num);
-                            if (attendedPairs > num) setAttendedPairs(num);
-                          }}
+                          onClick={() => setTotalPairs(num)}
                         >
                           {num}
                         </Button>
@@ -253,18 +270,42 @@ const Index = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Сколько пар посетил студент?</Label>
-                    <div className="flex gap-2">
-                      {Array.from({ length: totalPairs + 1 }, (_, i) => i).map(num => (
-                        <Button
-                          key={num}
-                          variant={attendedPairs === num ? 'default' : 'outline'}
-                          className={`flex-1 ${attendedPairs === num && num === totalPairs ? 'bg-green-600 hover:bg-green-700' : attendedPairs === num && num === 0 ? 'bg-red-600 hover:bg-red-700' : ''}`}
-                          onClick={() => setAttendedPairs(num)}
-                        >
-                          {num}
-                        </Button>
+                  <div className="space-y-3">
+                    <Label>Отметьте каждую пару</Label>
+                    <div className="space-y-2">
+                      {Array.from({ length: totalPairs }, (_, i) => i).map(idx => (
+                        <div key={idx} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-slate-50 transition-colors">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">Пара {idx + 1}</p>
+                            <p className="text-xs text-slate-500">2 часа</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant={pairsStatus[idx] === true ? 'default' : 'outline'}
+                              onClick={() => togglePair(idx)}
+                              className={pairsStatus[idx] === true ? 'bg-green-600 hover:bg-green-700' : ''}
+                            >
+                              <Icon name="Check" size={16} />
+                              <span className="ml-1">Был</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={pairsStatus[idx] === false ? 'destructive' : 'outline'}
+                              onClick={() => {
+                                const newStatus = [...pairsStatus];
+                                newStatus[idx] = false;
+                                setPairsStatus(newStatus);
+                              }}
+                            >
+                              <Icon name="X" size={16} />
+                              <span className="ml-1">Не было</span>
+                            </Button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -272,11 +313,11 @@ const Index = () => {
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <div className="flex justify-between text-sm">
                       <span className="text-blue-900">Посещено часов:</span>
-                      <span className="font-semibold text-blue-900">{attendedPairs * 2} из {totalPairs * 2} ч.</span>
+                      <span className="font-semibold text-blue-900">{pairsStatus.slice(0, totalPairs).filter(p => p).length * 2} из {totalPairs * 2} ч.</span>
                     </div>
                     <div className="flex justify-between text-sm mt-1">
                       <span className="text-blue-900">Пропущено:</span>
-                      <span className="font-semibold text-red-600">{(totalPairs - attendedPairs) * 2} ч.</span>
+                      <span className="font-semibold text-red-600">{(totalPairs - pairsStatus.slice(0, totalPairs).filter(p => p).length) * 2} ч.</span>
                     </div>
                   </div>
                 </div>
