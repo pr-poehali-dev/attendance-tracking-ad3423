@@ -22,8 +22,8 @@ interface Student {
 interface AttendanceRecord {
   studentId: string;
   date: string;
-  status: 'present' | 'absent' | 'tardy';
-  hours: number;
+  pairsAttended: number;
+  totalPairs: number;
 }
 
 const initialStudents: Student[] = [
@@ -41,23 +41,42 @@ const Index = () => {
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [newStudentName, setNewStudentName] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
+  const [pairsDialogOpen, setPairsDialogOpen] = useState(false);
+  const [totalPairs, setTotalPairs] = useState(1);
+  const [attendedPairs, setAttendedPairs] = useState(0);
 
   const todayStr = format(selectedDate, 'yyyy-MM-dd');
 
-  const markAttendance = (studentId: string, status: 'present' | 'absent' | 'tardy') => {
-    const hours = status === 'present' ? 2 : status === 'tardy' ? 1 : 0;
-    
-    setAttendance(prev => {
-      const existing = prev.find(a => a.studentId === studentId && a.date === todayStr);
-      if (existing) {
-        return prev.map(a => 
-          a.studentId === studentId && a.date === todayStr 
-            ? { ...a, status, hours } 
-            : a
-        );
-      }
-      return [...prev, { studentId, date: todayStr, status, hours }];
-    });
+  const openPairsDialog = (studentId: string) => {
+    const existing = getAttendanceForDate(studentId, todayStr);
+    setSelectedStudent(studentId);
+    if (existing) {
+      setTotalPairs(existing.totalPairs);
+      setAttendedPairs(existing.pairsAttended);
+    } else {
+      setTotalPairs(1);
+      setAttendedPairs(0);
+    }
+    setPairsDialogOpen(true);
+  };
+
+  const saveAttendance = () => {
+    if (selectedStudent) {
+      setAttendance(prev => {
+        const existing = prev.find(a => a.studentId === selectedStudent && a.date === todayStr);
+        if (existing) {
+          return prev.map(a => 
+            a.studentId === selectedStudent && a.date === todayStr 
+              ? { ...a, pairsAttended: attendedPairs, totalPairs } 
+              : a
+          );
+        }
+        return [...prev, { studentId: selectedStudent, date: todayStr, pairsAttended: attendedPairs, totalPairs }];
+      });
+      setPairsDialogOpen(false);
+      setSelectedStudent(null);
+    }
   };
 
   const getAttendanceForDate = (studentId: string, date: string) => {
@@ -87,13 +106,13 @@ const Index = () => {
       a.studentId === studentId && a.date.startsWith(monthStr)
     );
     
-    const totalClasses = records.length;
-    const present = records.filter(r => r.status === 'present').length;
-    const absent = records.filter(r => r.status === 'absent').length;
-    const tardy = records.filter(r => r.status === 'tardy').length;
-    const missedHours = records.reduce((sum, r) => sum + (2 - r.hours), 0);
+    const totalDays = records.length;
+    const totalPairsScheduled = records.reduce((sum, r) => sum + r.totalPairs, 0);
+    const totalPairsAttended = records.reduce((sum, r) => sum + r.pairsAttended, 0);
+    const missedPairs = totalPairsScheduled - totalPairsAttended;
+    const missedHours = missedPairs * 2;
     
-    return { totalClasses, present, absent, tardy, missedHours };
+    return { totalDays, totalPairsScheduled, totalPairsAttended, missedPairs, missedHours };
   };
 
   const exportToExcel = () => {
@@ -102,10 +121,10 @@ const Index = () => {
       const stats = getMonthlyStats(student.id);
       return {
         'ФИО': student.name,
-        'Всего занятий': stats.totalClasses,
-        'Присутствовал': stats.present,
-        'Отсутствовал': stats.absent,
-        'Опоздал': stats.tardy,
+        'Учебных дней': stats.totalDays,
+        'Всего пар': stats.totalPairsScheduled,
+        'Посещено пар': stats.totalPairsAttended,
+        'Пропущено пар': stats.missedPairs,
         'Пропущено часов': stats.missedHours
       };
     });
@@ -174,46 +193,28 @@ const Index = () => {
                       {students.map(student => {
                         const record = getAttendanceForDate(student.id, todayStr);
                         return (
-                          <Card key={student.id} className="hover-scale">
+                          <Card key={student.id} className="hover-scale cursor-pointer" onClick={() => openPairsDialog(student.id)}>
                             <CardContent className="p-4">
                               <div className="flex items-center justify-between gap-4">
                                 <div className="flex-1">
                                   <p className="font-medium text-slate-900">{student.name}</p>
                                   {record && (
                                     <p className="text-sm text-slate-500">
-                                      {record.hours} ч. - {
-                                        record.status === 'present' ? 'Присутствовал' :
-                                        record.status === 'tardy' ? 'Опоздал' : 'Отсутствовал'
-                                      }
+                                      Посещено: {record.pairsAttended} из {record.totalPairs} пар ({record.pairsAttended * 2} ч.)
                                     </p>
+                                  )}
+                                  {!record && (
+                                    <p className="text-sm text-slate-400">Нажмите для отметки</p>
                                   )}
                                 </div>
                                 
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant={record?.status === 'present' ? 'default' : 'outline'}
-                                    onClick={() => markAttendance(student.id, 'present')}
-                                    className={record?.status === 'present' ? 'bg-green-600 hover:bg-green-700' : ''}
-                                  >
-                                    <Icon name="Check" size={16} />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={record?.status === 'tardy' ? 'default' : 'outline'}
-                                    onClick={() => markAttendance(student.id, 'tardy')}
-                                    className={record?.status === 'tardy' ? 'bg-yellow-600 hover:bg-yellow-700' : ''}
-                                  >
-                                    <Icon name="Clock" size={16} />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={record?.status === 'absent' ? 'destructive' : 'outline'}
-                                    onClick={() => markAttendance(student.id, 'absent')}
-                                  >
-                                    <Icon name="X" size={16} />
-                                  </Button>
-                                </div>
+                                {record && (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={record.pairsAttended === record.totalPairs ? 'default' : record.pairsAttended > 0 ? 'outline' : 'destructive'}>
+                                      {record.pairsAttended}/{record.totalPairs}
+                                    </Badge>
+                                  </div>
+                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -224,6 +225,67 @@ const Index = () => {
                 </div>
               </CardContent>
             </Card>
+            <Dialog open={pairsDialogOpen} onOpenChange={setPairsDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Отметка посещаемости</DialogTitle>
+                  <DialogDescription>
+                    {selectedStudent && students.find(s => s.id === selectedStudent)?.name}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  <div className="space-y-2">
+                    <Label>Сколько пар было в этот день?</Label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map(num => (
+                        <Button
+                          key={num}
+                          variant={totalPairs === num ? 'default' : 'outline'}
+                          className="flex-1"
+                          onClick={() => {
+                            setTotalPairs(num);
+                            if (attendedPairs > num) setAttendedPairs(num);
+                          }}
+                        >
+                          {num}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Сколько пар посетил студент?</Label>
+                    <div className="flex gap-2">
+                      {Array.from({ length: totalPairs + 1 }, (_, i) => i).map(num => (
+                        <Button
+                          key={num}
+                          variant={attendedPairs === num ? 'default' : 'outline'}
+                          className={`flex-1 ${attendedPairs === num && num === totalPairs ? 'bg-green-600 hover:bg-green-700' : attendedPairs === num && num === 0 ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                          onClick={() => setAttendedPairs(num)}
+                        >
+                          {num}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-blue-900">Посещено часов:</span>
+                      <span className="font-semibold text-blue-900">{attendedPairs * 2} из {totalPairs * 2} ч.</span>
+                    </div>
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-blue-900">Пропущено:</span>
+                      <span className="font-semibold text-red-600">{(totalPairs - attendedPairs) * 2} ч.</span>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setPairsDialogOpen(false)}>Отмена</Button>
+                  <Button onClick={saveAttendance}>Сохранить</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="students" className="animate-fade-in">
@@ -320,8 +382,8 @@ const Index = () => {
                 <div className="space-y-4">
                   {students.map(student => {
                     const stats = getMonthlyStats(student.id);
-                    const attendanceRate = stats.totalClasses > 0 
-                      ? Math.round((stats.present / stats.totalClasses) * 100) 
+                    const attendanceRate = stats.totalPairsScheduled > 0 
+                      ? Math.round((stats.totalPairsAttended / stats.totalPairsScheduled) * 100) 
                       : 100;
 
                     return (
@@ -330,7 +392,7 @@ const Index = () => {
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
                               <h3 className="font-semibold text-slate-900">{student.name}</h3>
-                              <Badge variant={stats.missedHours > 6 ? 'destructive' : stats.missedHours > 2 ? 'outline' : 'default'}>
+                              <Badge variant={stats.missedHours > 12 ? 'destructive' : stats.missedHours > 4 ? 'outline' : 'default'}>
                                 Пропущено: {stats.missedHours} ч.
                               </Badge>
                             </div>
@@ -345,20 +407,20 @@ const Index = () => {
 
                             <div className="grid grid-cols-4 gap-2 text-center text-sm">
                               <div className="p-2 bg-slate-50 rounded">
-                                <div className="font-semibold text-slate-900">{stats.totalClasses}</div>
-                                <div className="text-slate-600">Занятий</div>
+                                <div className="font-semibold text-slate-900">{stats.totalDays}</div>
+                                <div className="text-slate-600">Дней</div>
+                              </div>
+                              <div className="p-2 bg-blue-50 rounded">
+                                <div className="font-semibold text-blue-700">{stats.totalPairsScheduled}</div>
+                                <div className="text-blue-600">Всего пар</div>
                               </div>
                               <div className="p-2 bg-green-50 rounded">
-                                <div className="font-semibold text-green-700">{stats.present}</div>
-                                <div className="text-green-600">Присутствовал</div>
-                              </div>
-                              <div className="p-2 bg-yellow-50 rounded">
-                                <div className="font-semibold text-yellow-700">{stats.tardy}</div>
-                                <div className="text-yellow-600">Опоздал</div>
+                                <div className="font-semibold text-green-700">{stats.totalPairsAttended}</div>
+                                <div className="text-green-600">Посещено</div>
                               </div>
                               <div className="p-2 bg-red-50 rounded">
-                                <div className="font-semibold text-red-700">{stats.absent}</div>
-                                <div className="text-red-600">Отсутствовал</div>
+                                <div className="font-semibold text-red-700">{stats.missedPairs}</div>
+                                <div className="text-red-600">Пропущено</div>
                               </div>
                             </div>
                           </div>
@@ -402,9 +464,9 @@ const Index = () => {
                       <h3 className="font-semibold text-blue-900 mb-2">Что будет в отчёте?</h3>
                       <ul className="text-sm text-blue-800 space-y-1">
                         <li>• ФИО всех студентов группы</li>
-                        <li>• Количество занятий за месяц</li>
-                        <li>• Статистика присутствия/отсутствия/опозданий</li>
-                        <li>• Пропущенные часы за месяц</li>
+                        <li>• Количество учебных дней</li>
+                        <li>• Всего пар и посещено пар</li>
+                        <li>• Пропущенные пары и часы</li>
                       </ul>
                     </div>
                   </div>
@@ -414,10 +476,10 @@ const Index = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>ФИО</TableHead>
-                      <TableHead className="text-center">Занятий</TableHead>
-                      <TableHead className="text-center">Присутствовал</TableHead>
-                      <TableHead className="text-center">Отсутствовал</TableHead>
-                      <TableHead className="text-center">Опоздал</TableHead>
+                      <TableHead className="text-center">Дней</TableHead>
+                      <TableHead className="text-center">Всего пар</TableHead>
+                      <TableHead className="text-center">Посещено пар</TableHead>
+                      <TableHead className="text-center">Пропущено пар</TableHead>
                       <TableHead className="text-center">Пропущено часов</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -427,10 +489,10 @@ const Index = () => {
                       return (
                         <TableRow key={student.id}>
                           <TableCell className="font-medium">{student.name}</TableCell>
-                          <TableCell className="text-center">{stats.totalClasses}</TableCell>
-                          <TableCell className="text-center text-green-700">{stats.present}</TableCell>
-                          <TableCell className="text-center text-red-700">{stats.absent}</TableCell>
-                          <TableCell className="text-center text-yellow-700">{stats.tardy}</TableCell>
+                          <TableCell className="text-center">{stats.totalDays}</TableCell>
+                          <TableCell className="text-center text-blue-700">{stats.totalPairsScheduled}</TableCell>
+                          <TableCell className="text-center text-green-700">{stats.totalPairsAttended}</TableCell>
+                          <TableCell className="text-center text-red-700">{stats.missedPairs}</TableCell>
                           <TableCell className="text-center font-semibold">{stats.missedHours}</TableCell>
                         </TableRow>
                       );
